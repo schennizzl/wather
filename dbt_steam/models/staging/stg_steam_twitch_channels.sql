@@ -18,6 +18,6 @@ select
     cast(json_extract_scalar(payload, '$.is_partial') as boolean) as is_partial,
     cast(json_extract_scalar(payload, '$.dt') as date) as event_date,
     cast(json_extract_scalar(payload, '$.hour') as integer) as event_hour,
-    upload_dt as ingested_at,ы
+    upload_dt as ingested_at,
     json_extract_scalar(payload, '$.source_file') as source_file
 from {{ ref('raw_steam_twitch_channels') }}
