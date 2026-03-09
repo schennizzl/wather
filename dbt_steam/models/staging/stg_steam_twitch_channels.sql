@@ -10,7 +10,7 @@ select
     json_extract_scalar(payload, '$.broadcaster_name') as broadcaster_name,
     json_extract_scalar(payload, '$.title') as title,
     json_extract_scalar(payload, '$.language') as language,
-    cast(from_iso8601_timestamp(payload, '$.started_at') as timestamp) as started_at,
+    cast(from_iso8601_timestamp(json_extract_scalar(payload, '$.started_at')) as timestamp) as started_at,
     json_extract_scalar(payload, '$.thumbnail_url') as thumbnail_url,
     cast(json_extract_scalar(payload, '$.is_mature') as boolean) as is_mature,
     cast(json_extract_scalar(payload, '$.viewer_count') as integer) as viewer_count,
