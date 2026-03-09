@@ -24,3 +24,6 @@ models:
     staging:
       +schema: stg
       +materialized: view
+    ods:
+      +schema: ods
+      +materialized: table

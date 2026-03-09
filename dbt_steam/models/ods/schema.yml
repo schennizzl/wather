@@ -1,0 +1,158 @@
+version: 2
+
+models:
+  - name: ods_game
+    columns:
+      - name: appid
+        tests:
+          - not_null
+          - unique
+
+  - name: ods_game_name_history
+    columns:
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: game_name
+        tests:
+          - not_null
+      - name: valid_from_ts
+        tests:
+          - not_null
+
+  - name: ods_twitch_category
+    columns:
+      - name: twitch_category_id
+        tests:
+          - not_null
+          - unique
+
+  - name: ods_twitch_category_name_history
+    columns:
+      - name: twitch_category_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_twitch_category')
+              field: twitch_category_id
+      - name: twitch_category_name
+        tests:
+          - not_null
+
+  - name: ods_twitch_broadcaster
+    columns:
+      - name: broadcaster_id
+        tests:
+          - not_null
+          - unique
+
+  - name: ods_twitch_broadcaster_profile_history
+    columns:
+      - name: broadcaster_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_twitch_broadcaster')
+              field: broadcaster_id
+      - name: broadcaster_login
+        tests:
+          - not_null
+      - name: broadcaster_name
+        tests:
+          - not_null
+
+  - name: ods_game_twitch_lookup_history
+    columns:
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: twitch_lookup_name
+        tests:
+          - not_null
+
+  - name: ods_game_twitch_category_history
+    columns:
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: twitch_category_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_twitch_category')
+              field: twitch_category_id
+
+  - name: ods_game_configured_twitch_category_history
+    columns:
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: configured_twitch_category_id
+        tests:
+          - not_null
+
+  - name: ods_fact_game_online_hourly
+    columns:
+      - name: game_online_event_id
+        tests:
+          - not_null
+          - unique
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+
+  - name: ods_fact_twitch_category_hourly
+    columns:
+      - name: twitch_category_event_id
+        tests:
+          - not_null
+          - unique
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: twitch_category_id
+        tests:
+          - relationships:
+              to: ref('ods_twitch_category')
+              field: twitch_category_id
+
+  - name: ods_fact_twitch_stream_hourly
+    columns:
+      - name: twitch_stream_event_id
+        tests:
+          - not_null
+          - unique
+      - name: appid
+        tests:
+          - not_null
+          - relationships:
+              to: ref('ods_game')
+              field: appid
+      - name: broadcaster_id
+        tests:
+          - relationships:
+              to: ref('ods_twitch_broadcaster')
+              field: broadcaster_id
+      - name: twitch_category_id
+        tests:
+          - relationships:
+              to: ref('ods_twitch_category')
+              field: twitch_category_id
