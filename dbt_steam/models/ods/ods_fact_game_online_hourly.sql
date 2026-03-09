@@ -14,7 +14,7 @@ with dedup as (
     from {{ ref('stg_steam_game_online') }}
 )
 select
-    cast(appid as varchar) || '|' || cast(event_ts_hour as varchar) as game_online_event_id,
+    sha256(cast(appid as varchar) || cast(event_ts_hour as varchar)) as game_online_event_id,
     appid,
     current_players,
     event_date,

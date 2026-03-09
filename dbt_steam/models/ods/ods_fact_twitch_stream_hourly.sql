@@ -23,7 +23,7 @@ with dedup as (
     from {{ ref('stg_steam_twitch_channels') }}
 )
 select
-    cast(appid as varchar) || '|' || coalesce(broadcaster_id, '') || '|' || cast(event_ts_hour as varchar) as twitch_stream_event_id,
+    sha256(cast(appid as varchar) || cast(broadcaster_id as varchar) || cast(event_ts_hour as varchar)) as twitch_stream_event_id,
     appid,
     twitch_category_id,
     broadcaster_id,

@@ -23,7 +23,7 @@ models:
       +materialized: table
     staging:
       +schema: stg
-      +materialized: view
+      +materialized: table
     ods:
       +schema: ods
       +materialized: table
