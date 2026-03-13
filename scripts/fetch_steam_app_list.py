@@ -17,6 +17,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from io_helpers import build_metadata_fields, write_enveloped_ndjson
+
 API_URL_LEGACY = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
 API_URL_STORE = "https://api.steampowered.com/IStoreService/GetAppList/v1/"
 API_URL_APPDETAILS = "https://store.steampowered.com/api/appdetails"
@@ -144,18 +146,6 @@ def write_json(apps: List[Dict[str, Any]], output_path: Path) -> None:
         json.dump(apps, handle, indent=2, ensure_ascii=True)
 
 
-def write_ndjson(
-    records: List[Dict[str, Any]], output_path: Path, extra_fields: Dict[str, Any] | None = None
-) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    extra_fields = extra_fields or {}
-    with output_path.open("w", encoding="utf-8") as handle:
-        for record in records:
-            payload = dict(record)
-            payload.update(extra_fields)
-            handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
-
-
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Download the full Steam app catalog to a JSON file."
@@ -226,135 +216,104 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    extra_fields = {
-        key: value
-        for key, value in {
-            "source_file": args.meta_source_file,
-            "ingested_at": args.meta_ingested_at,
-            "dt": args.meta_dt,
-            "hour": args.meta_hour,
-        }.items()
-        if value is not None
-    }
+    extra_fields = build_metadata_fields(args)
 
-    apps = fetch_app_list(api_key=args.api_key, retries=args.retries, timeout=args.timeout)
+    try:
+        apps = fetch_app_list(api_key=args.api_key, retries=args.retries, timeout=args.timeout)
+    except Exception as exc:
+        print(f"[steam_app_list] ERROR: {exc}", file=sys.stderr)
+        return 1
+
     if args.sort:
         apps = sorted(apps, key=lambda item: int(item.get("appid", 0)))
 
     if args.output_ndjson:
-        write_ndjson(apps, args.output, extra_fields=extra_fields)
+        write_enveloped_ndjson(apps, args.output, extra_fields)
     else:
         write_json(apps, args.output)
-    print(f"Wrote {len(apps):,} entries to {args.output}")
+
+    print(f"Wrote {len(apps)} apps to {args.output}")
 
     if args.types_output:
-        if args.types_checkpoint and not args.types_ndjson:
-            raise SystemExit("???????? ?????????????? ?????? ? --types-ndjson")
+        types_records: list[dict[str, Any]] = []
+        processed = 0
+        last_appid = 0
 
-        limit = args.types_limit if args.types_limit > 0 else len(apps)
-        out_path = args.types_output
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        last_appid = None
         if args.types_checkpoint and args.types_checkpoint.exists():
             try:
-                with args.types_checkpoint.open("r", encoding="utf-8") as cp:
-                    saved = json.load(cp)
-                    last_appid = int(saved.get("last_appid", 0))
+                checkpoint = json.loads(args.types_checkpoint.read_text(encoding="utf-8"))
+                last_appid = int(checkpoint.get("last_appid", 0))
             except Exception:
-                last_appid = None
+                last_appid = 0
 
-        def iter_records():
-            processed = 0
-            for item in apps:
-                appid = int(item.get("appid", 0))
-                if last_appid and appid <= last_appid:
-                    continue
-                if limit and processed >= limit:
-                    break
-                type_val = get_app_type(appid, timeout=args.timeout)
-                processed += 1
-                payload = {"appid": appid, "name": item.get("name"), "type": type_val}
-                if extra_fields:
-                    payload.update(extra_fields)
-                yield payload
-                if args.types_sleep > 0:
-                    time.sleep(args.types_sleep)
+        for app in apps:
+            appid = int(app.get("appid", 0))
+            if last_appid and appid <= last_appid:
+                continue
 
-        if args.types_ndjson:
-            mode = "a" if args.types_checkpoint else "w"
-            written = 0
-            with out_path.open(mode, encoding="utf-8") as handle:
-                for rec in iter_records():
-                    handle.write(json.dumps(rec, ensure_ascii=True) + "\n")
-                    written += 1
-        else:
-            records = list(iter_records())
-            written = len(records)
-            with out_path.open("w", encoding="utf-8") as handle:
-                json.dump(records, handle, indent=2, ensure_ascii=True)
+            record = {
+                "appid": appid,
+                "name": app.get("name"),
+                "type": get_app_type(appid, timeout=args.timeout),
+            }
 
-        if args.types_checkpoint:
-            max_appid = last_appid
-            try:
-                with out_path.open("r", encoding="utf-8") as handle:
-                    for line in handle:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        obj = json.loads(line)
-                        aid = int(obj.get("appid", 0))
-                        if max_appid is None or aid > max_appid:
-                            max_appid = aid
-            except Exception:
-                pass
+            if args.types_ndjson:
+                mode = "a" if processed > 0 or (args.types_output.exists()) else "w"
+                write_enveloped_ndjson([record], args.types_output, extra_fields, mode=mode)
+            else:
+                types_records.append(record)
 
-            if max_appid is not None:
+            processed += 1
+            last_appid = appid
+
+            if args.types_checkpoint:
                 args.types_checkpoint.parent.mkdir(parents=True, exist_ok=True)
-                with args.types_checkpoint.open("w", encoding="utf-8") as cp:
-                    json.dump(
-                        {"last_appid": max_appid, "updated_at": datetime.utcnow().isoformat()},
-                        cp,
+                args.types_checkpoint.write_text(
+                    json.dumps(
+                        {
+                            "last_appid": last_appid,
+                            "updated_at": datetime.utcnow().isoformat() + "Z",
+                        },
                         ensure_ascii=True,
                         indent=2,
-                    )
+                    ),
+                    encoding="utf-8",
+                )
 
-        print(f"Wrote types for {written:,} apps to {out_path}")
+            if args.types_limit and processed >= args.types_limit:
+                break
+            if args.types_sleep > 0:
+                time.sleep(args.types_sleep)
+
+        if not args.types_ndjson:
+            write_json(types_records, args.types_output)
+        print(f"Wrote {processed} app type rows to {args.types_output}")
 
     if args.details_output:
-        limit = args.details_limit if args.details_limit > 0 else len(apps)
-        out_path = args.details_output
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        details_records: list[dict[str, Any]] = []
+        processed = 0
+        for app in apps:
+            appid = int(app.get("appid", 0))
+            record = get_app_details(appid, timeout=args.timeout)
+            if record is None:
+                continue
 
-        def iter_details():
-            processed = 0
-            for item in apps:
-                appid = int(item.get("appid", 0))
-                if limit and processed >= limit:
-                    break
-                details = get_app_details(appid, timeout=args.timeout)
-                processed += 1
-                if details is None:
-                    continue
-                if extra_fields:
-                    details.update(extra_fields)
-                yield details
-                if args.details_sleep > 0:
-                    time.sleep(args.details_sleep)
+            if args.details_ndjson:
+                mode = "a" if processed > 0 or args.details_output.exists() else "w"
+                write_enveloped_ndjson([record], args.details_output, extra_fields, mode=mode)
+            else:
+                details_records.append(record)
 
-        if args.details_ndjson:
-            written = 0
-            with out_path.open("w", encoding="utf-8") as handle:
-                for rec in iter_details():
-                    handle.write(json.dumps(rec, ensure_ascii=True) + "\n")
-                    written += 1
-        else:
-            records = list(iter_details())
-            written = len(records)
-            with out_path.open("w", encoding="utf-8") as handle:
-                json.dump(records, handle, indent=2, ensure_ascii=True)
+            processed += 1
+            if args.details_limit and processed >= args.details_limit:
+                break
+            if args.details_sleep > 0:
+                time.sleep(args.details_sleep)
 
-        print(f"Wrote appdetails for {written:,} apps to {out_path}")
+        if not args.details_ndjson:
+            write_json(details_records, args.details_output)
+        print(f"Wrote {processed} appdetails rows to {args.details_output}")
+
     return 0
 
 

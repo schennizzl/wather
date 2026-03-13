@@ -13,11 +13,11 @@ from trino.dbapi import connect
 
 PROJECT_DIR = "/opt/airflow/project"
 DATA_DIR = f"{PROJECT_DIR}/data"
-FETCH_SCRIPT = f"{PROJECT_DIR}/fetch_steam_app_list.py"
+FETCH_SCRIPT = f"{PROJECT_DIR}/scripts/fetch_steam_app_list.py"
 DBT_PROJECT_DIR = f"{PROJECT_DIR}/dbt_steam"
 STEAM_API_KEY = "{{ var.value.STEAM_API_KEY }}"
 S3_BUCKET = "raw"
-S3_PREFIX = "steam/landing/appdetails_types/dt={{ ds }}/hour={{ execution_date.strftime('%H') }}"
+S3_PREFIX = "steam/raw/appdetails_types/dt={{ ds }}/hour={{ execution_date.strftime('%H') }}"
 FILE_NAME = "steam_app_types_{{ ts_nodash }}.ndjson"
 TYPES_BATCH_LIMIT = 100
 MOSCOW_TZ = pendulum.timezone("Europe/Moscow")
@@ -40,7 +40,7 @@ def _trino_connect():
         user=user,
         auth=BasicAuthentication(user, password),
         catalog="hive",
-        schema="landing",
+        schema="raw",
         http_scheme=os.getenv("TRINO_HTTP_SCHEME", "https"),
         verify=os.getenv("TRINO_VERIFY", "false").lower() == "true",
         request_timeout=(connect_timeout, request_timeout),
@@ -51,7 +51,7 @@ def _trino_connect():
 def sync_landing_appdetails_partitions() -> None:
     conn = _trino_connect()
     cur = conn.cursor()
-    cur.execute("CALL system.sync_partition_metadata('landing', 'appdetails_types_files', 'ADD')")
+    cur.execute("CALL system.sync_partition_metadata('raw', 'appdetails_types_files', 'ADD')")
     cur.fetchall()
     conn.close()
 
@@ -110,12 +110,12 @@ with DAG(
         python_callable=sync_landing_appdetails_partitions,
     )
 
-    load_raw_trino = BashOperator(
-        task_id="load_raw_trino",
+    load_stg_trino = BashOperator(
+        task_id="load_stg_trino",
         bash_command=(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
-            "dbt run --profiles-dir . --select raw_steam_app_types stg_steam_app_types"
+            "dbt run --profiles-dir . --select stg_steam_app_types"
         ),
     )
 
@@ -125,8 +125,8 @@ with DAG(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
             "dbt test --profiles-dir . "
-            "--select raw_steam_app_types stg_steam_app_types"
+            "--select stg_steam_app_types"
         ),
     )
 
-    ensure_dirs >> fetch_types >> upload_minio >> sync_landing_partitions >> load_raw_trino >> test_dbt_models
+    ensure_dirs >> fetch_types >> upload_minio >> sync_landing_partitions >> load_stg_trino >> test_dbt_models

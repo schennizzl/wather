@@ -1,19 +1,15 @@
 version: 2
 
 sources:
-  - name: landing
-    description: "Landing tables over NDJSON files in MinIO, exposed via Trino Hive catalog."
-    schema: landing
+  - name: raw
+    description: "Raw payload tables over NDJSON envelopes in MinIO, exposed via Trino Hive catalog."
+    schema: raw
     tables:
       - name: store_daily_files
-        description: "Daily Steam app list snapshots written by Airflow."
+        description: "Daily Steam app list payload envelopes written by Airflow."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: name
-            description: "Application name from Steam catalog."
-          - name: type
-            description: "Application type from Steam store service."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at
@@ -22,14 +18,10 @@ sources:
             description: "Partition date."
 
       - name: appdetails_types_files
-        description: "Incremental type events from Steam appdetails."
+        description: "Incremental Steam app type payload envelopes."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: name
-            description: "Application name from Steam catalog."
-          - name: type
-            description: "Resolved application type from appdetails."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at
@@ -40,14 +32,10 @@ sources:
             description: "Hour partition within the date."
 
       - name: appdetails_daily_files
-        description: "Daily full normalized appdetails snapshots from Steam store."
+        description: "Daily Steam appdetails payload envelopes."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: name
-            description: "Application name from Steam appdetails."
-          - name: type
-            description: "Resolved application type from appdetails."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at
@@ -56,14 +44,10 @@ sources:
             description: "Partition date."
 
       - name: game_online_files
-        description: "5-minute current player counts for tracked games."
+        description: "5-minute current player payload envelopes for tracked games."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: game_name
-            description: "Tracked game name from games.txt."
-          - name: current_players
-            description: "Current players returned by Steam API."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at
@@ -74,26 +58,10 @@ sources:
             description: "Hour partition within the date."
 
       - name: twitch_viewers_files
-        description: "20-minute Twitch live viewers for tracked games."
+        description: "20-minute Twitch viewer payload envelopes for tracked games."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: game_name
-            description: "Tracked game name from games.txt."
-          - name: twitch_lookup_name
-            description: "Exact Twitch category name configured for lookup."
-          - name: twitch_category_id
-            description: "Matched Twitch category identifier."
-          - name: twitch_category_name
-            description: "Matched Twitch category name."
-          - name: approx_total_viewers
-            description: "Approximate sum of live viewers across Twitch streams for the category."
-          - name: live_channels
-            description: "Number of live channels counted for the category."
-          - name: pages_fetched
-            description: "Number of Helix streams pages requested."
-          - name: is_partial
-            description: "Whether pagination hit the configured safety limit before exhausting results."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at
@@ -104,42 +72,10 @@ sources:
             description: "Hour partition within the date."
 
       - name: twitch_channels_files
-        description: "20-minute Twitch live channel snapshots for tracked games."
+        description: "20-minute Twitch channel payload envelopes for tracked games."
         columns:
-          - name: appid
-            description: "Steam application identifier."
-          - name: game_name
-            description: "Tracked game name from games.txt."
-          - name: twitch_lookup_name
-            description: "Exact Twitch category name configured for lookup."
-          - name: configured_twitch_category_id
-            description: "Explicit Twitch category ID configured in games.txt when present."
-          - name: twitch_category_id
-            description: "Resolved Twitch category identifier."
-          - name: twitch_category_name
-            description: "Resolved Twitch category name."
-          - name: broadcaster_id
-            description: "Twitch broadcaster identifier."
-          - name: broadcaster_login
-            description: "Twitch broadcaster login."
-          - name: broadcaster_name
-            description: "Twitch display name."
-          - name: title
-            description: "Current live stream title."
-          - name: language
-            description: "Primary stream language."
-          - name: started_at
-            description: "Stream start timestamp from Twitch."
-          - name: thumbnail_url
-            description: "Templated Twitch thumbnail URL."
-          - name: is_mature
-            description: "Whether the stream is marked mature."
-          - name: viewer_count
-            description: "Current viewers for the individual channel."
-          - name: pages_fetched
-            description: "Number of Helix streams pages requested for the category."
-          - name: is_partial
-            description: "Whether pagination hit the configured safety limit before exhausting results."
+          - name: payload
+            description: "Raw JSON payload as text."
           - name: source_file
             description: "Fully qualified MinIO object path."
           - name: ingested_at

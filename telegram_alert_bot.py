@@ -547,7 +547,6 @@ class MinioReporter:
 
 def trino_storage_paths() -> list[dict[str, str]]:
     return [
-        {"name": "landing", "path": "/data/raw/steam/landing"},
         {"name": "raw", "path": "/data/raw/warehouse/raw"},
         {"name": "stg", "path": "/data/raw/warehouse/stg"},
         {"name": "ods", "path": "/data/raw/warehouse/ods.db"},
@@ -763,7 +762,7 @@ def main() -> int:
         user=os.getenv("TRINO_USER", "ilya"),
         password=env_value("TRINO_PASSWORD"),
         catalog=os.getenv("TRINO_CATALOG", "hive"),
-        schemas=env_csv("TRINO_SCHEMAS", ["landing", "raw", "stg", "ods"]),
+        schemas=env_csv("TRINO_SCHEMAS", ["raw", "stg", "ods"]),
         http_scheme=os.getenv("TRINO_HTTP_SCHEME", "https"),
         verify=os.getenv("TRINO_VERIFY", "false").lower() == "true",
         request_timeout=request_timeout,

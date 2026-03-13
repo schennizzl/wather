@@ -18,9 +18,6 @@ models:
     +persist_docs:
       relation: true
       columns: true
-    raw:
-      +schema: raw
-      +materialized: table
     staging:
       +schema: stg
       +materialized: table

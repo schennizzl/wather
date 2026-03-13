@@ -414,7 +414,7 @@ services:
       TRINO_USER: ${AIRFLOW_ADMIN_USERNAME}
       TRINO_PASSWORD_FILE: /run/secrets/airflow_admin_password
       TRINO_CATALOG: hive
-      TRINO_SCHEMAS: landing,raw,stg,ods
+      TRINO_SCHEMAS: raw,stg,ods
       TRINO_VERIFY: "false"
     secrets:
       - airflow_admin_password

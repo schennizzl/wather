@@ -13,11 +13,11 @@ from trino.dbapi import connect
 
 PROJECT_DIR = "/opt/airflow/project"
 DATA_DIR = f"{PROJECT_DIR}/data"
-FETCH_SCRIPT = f"{PROJECT_DIR}/fetch_steam_app_list.py"
+FETCH_SCRIPT = f"{PROJECT_DIR}/scripts/fetch_steam_app_list.py"
 DBT_PROJECT_DIR = f"{PROJECT_DIR}/dbt_steam"
 STEAM_API_KEY = "{{ var.value.STEAM_API_KEY }}"
 S3_BUCKET = "raw"
-S3_PREFIX = "steam/landing/store_daily/dt={{ ds }}"
+S3_PREFIX = "steam/raw/store_daily/dt={{ ds }}"
 FILE_NAME = "steam_app_list_{{ ds_nodash }}.ndjson"
 MOSCOW_TZ = pendulum.timezone("Europe/Moscow")
 
@@ -39,7 +39,7 @@ def _trino_connect():
         user=user,
         auth=BasicAuthentication(user, password),
         catalog="hive",
-        schema="landing",
+        schema="raw",
         http_scheme=os.getenv("TRINO_HTTP_SCHEME", "https"),
         verify=os.getenv("TRINO_VERIFY", "false").lower() == "true",
         request_timeout=(connect_timeout, request_timeout),
@@ -50,7 +50,7 @@ def _trino_connect():
 def sync_landing_store_daily_partitions() -> None:
     conn = _trino_connect()
     cur = conn.cursor()
-    cur.execute("CALL system.sync_partition_metadata('landing', 'store_daily_files', 'ADD')")
+    cur.execute("CALL system.sync_partition_metadata('raw', 'store_daily_files', 'ADD')")
     cur.fetchall()
     conn.close()
 
@@ -104,12 +104,12 @@ with DAG(
         python_callable=sync_landing_store_daily_partitions,
     )
 
-    load_raw_trino = BashOperator(
-        task_id="load_raw_trino",
+    load_stg_trino = BashOperator(
+        task_id="load_stg_trino",
         bash_command=(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
-            "dbt run --profiles-dir . --select raw_steam_store_daily stg_steam_store_daily "
+            "dbt run --profiles-dir . --select stg_steam_store_daily "
             "--vars '{\"snapshot_date\": \"{{ ds }}\"}'"
         ),
     )
@@ -120,8 +120,8 @@ with DAG(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
             "dbt test --profiles-dir . "
-            "--select raw_steam_store_daily stg_steam_store_daily"
+            "--select stg_steam_store_daily"
         ),
     )
 
-    ensure_dirs >> fetch_store >> upload_minio >> sync_landing_partitions >> load_raw_trino >> test_dbt_models
+    ensure_dirs >> fetch_store >> upload_minio >> sync_landing_partitions >> load_stg_trino >> test_dbt_models

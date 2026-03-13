@@ -8,6 +8,9 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from game_helpers import load_games_basic
+from io_helpers import build_metadata_fields, write_enveloped_ndjson
+
 API_URL_CURRENT_PLAYERS = "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
 
 
@@ -15,21 +18,6 @@ def _get_json(url: str, timeout: int) -> dict[str, Any]:
     req = Request(url, headers={"User-Agent": "codex-game-online-fetcher"})
     with urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
-
-
-def load_games(path: Path) -> list[tuple[int, str]]:
-    games: list[tuple[int, str]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for raw_line in handle:
-            line = raw_line.strip()
-            if not line:
-                continue
-            parts = line.split("\t")
-            if len(parts) < 2:
-                raise ValueError(f"Expected at least 2 tab-separated columns in {path}: {line!r}")
-            appid_raw, game_name = parts[0], parts[1]
-            games.append((int(appid_raw), game_name))
-    return games
 
 
 def fetch_current_players(appid: int, timeout: int) -> int | None:
@@ -56,35 +44,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    extra_fields = {
-        key: value
-        for key, value in {
-            "source_file": args.meta_source_file,
-            "ingested_at": args.meta_ingested_at,
-            "dt": args.meta_dt,
-            "hour": args.meta_hour,
-        }.items()
-        if value is not None
-    }
+    metadata_fields = build_metadata_fields(args)
 
     records: list[dict[str, Any]] = []
-    for appid, game_name in load_games(args.games_file):
+    for appid, game_name in load_games_basic(args.games_file):
         records.append(
             {
                 "appid": appid,
                 "game_name": game_name,
                 "current_players": fetch_current_players(appid=appid, timeout=args.timeout),
-                **extra_fields,
             }
         )
         if args.sleep > 0:
             time.sleep(args.sleep)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
-
+    write_enveloped_ndjson(records, args.output, metadata_fields)
     print(f"Wrote {len(records)} online rows to {args.output}")
     return 0
 

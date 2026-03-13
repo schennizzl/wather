@@ -13,11 +13,11 @@ from trino.dbapi import connect
 
 PROJECT_DIR = "/opt/airflow/project"
 DATA_DIR = f"{PROJECT_DIR}/data"
-FETCH_SCRIPT = f"{PROJECT_DIR}/fetch_game_online.py"
+FETCH_SCRIPT = f"{PROJECT_DIR}/scripts/fetch_game_online.py"
 GAMES_FILE = f"{PROJECT_DIR}/games.txt"
 DBT_PROJECT_DIR = f"{PROJECT_DIR}/dbt_steam"
 S3_BUCKET = "raw"
-S3_PREFIX = "steam/landing/game_online/dt={{ ds }}/hour={{ execution_date.strftime('%H') }}"
+S3_PREFIX = "steam/raw/game_online/dt={{ ds }}/hour={{ execution_date.strftime('%H') }}"
 FILE_NAME = "game_online_{{ ts_nodash }}.ndjson"
 MOSCOW_TZ = pendulum.timezone("Europe/Moscow")
 
@@ -39,7 +39,7 @@ def _trino_connect():
         user=user,
         auth=BasicAuthentication(user, password),
         catalog="hive",
-        schema="landing",
+        schema="raw",
         http_scheme=os.getenv("TRINO_HTTP_SCHEME", "https"),
         verify=os.getenv("TRINO_VERIFY", "false").lower() == "true",
         request_timeout=(connect_timeout, request_timeout),
@@ -50,7 +50,7 @@ def _trino_connect():
 def sync_landing_game_online_partitions() -> None:
     conn = _trino_connect()
     cur = conn.cursor()
-    cur.execute("CALL system.sync_partition_metadata('landing', 'game_online_files', 'ADD')")
+    cur.execute("CALL system.sync_partition_metadata('raw', 'game_online_files', 'ADD')")
     cur.fetchall()
     conn.close()
 
@@ -106,12 +106,12 @@ with DAG(
         python_callable=sync_landing_game_online_partitions,
     )
 
-    load_raw_trino = BashOperator(
-        task_id="load_raw_trino",
+    load_stg_trino = BashOperator(
+        task_id="load_stg_trino",
         bash_command=(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
-            "dbt run --profiles-dir . --select raw_steam_game_online stg_steam_game_online"
+            "dbt run --profiles-dir . --select stg_steam_game_online"
         ),
     )
 
@@ -121,8 +121,8 @@ with DAG(
             f"cd {DBT_PROJECT_DIR} && "
             "export TRINO_PASSWORD=\"$(cat /run/secrets/airflow_admin_password)\" && "
             "dbt test --profiles-dir . "
-            "--select raw_steam_game_online stg_steam_game_online"
+            "--select stg_steam_game_online"
         ),
     )
 
-    ensure_dirs >> fetch_online >> upload_minio >> sync_landing_partitions >> load_raw_trino >> test_dbt_models
+    ensure_dirs >> fetch_online >> upload_minio >> sync_landing_partitions >> load_stg_trino >> test_dbt_models

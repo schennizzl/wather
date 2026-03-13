@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import json
 import time
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlencode
 
-from fetch_twitch_viewers import (
+from game_helpers import load_games_with_twitch
+from io_helpers import build_metadata_fields, write_enveloped_ndjson
+from twitch_helpers import (
     STREAMS_URL,
     build_api_headers,
     fetch_app_access_token,
     get_category_by_id,
-    load_games,
+    http_json,
     search_category,
-    _http_json,
 )
 
 
@@ -24,8 +23,8 @@ def fetch_category_channels(
     headers: dict[str, str],
     max_pages: int | None,
     sleep_seconds: float,
-) -> tuple[list[dict[str, Any]], int, bool]:
-    streams: list[dict[str, Any]] = []
+) -> tuple[list[dict[str, object]], int, bool]:
+    streams: list[dict[str, object]] = []
     seen_user_ids: set[str] = set()
     pages_fetched = 0
     cursor: str | None = None
@@ -34,7 +33,7 @@ def fetch_category_channels(
         params = {"game_id": category_id, "first": 100}
         if cursor:
             params["after"] = cursor
-        payload = _http_json(f"{STREAMS_URL}?{urlencode(params)}", timeout, headers=headers)
+        payload = http_json(f"{STREAMS_URL}?{urlencode(params)}", timeout, headers=headers)
         page_streams = payload.get("data", [])
         for stream in page_streams:
             user_id = stream.get("user_id")
@@ -75,16 +74,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    extra_fields = {
-        key: value
-        for key, value in {
-            "source_file": args.meta_source_file,
-            "ingested_at": args.meta_ingested_at,
-            "dt": args.meta_dt,
-            "hour": args.meta_hour,
-        }.items()
-        if value is not None
-    }
+    metadata_fields = build_metadata_fields(args)
 
     if not args.client_id.strip() or not args.client_secret.strip():
         raise RuntimeError("Twitch credentials are required via TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET")
@@ -93,13 +83,21 @@ def main() -> int:
     headers = build_api_headers(args.client_id, access_token)
     max_pages = args.max_pages if args.max_pages and args.max_pages > 0 else None
 
-    records: list[dict[str, Any]] = []
-    for appid, game_name, twitch_lookup_name, configured_twitch_category_id in load_games(args.games_file):
+    records: list[dict[str, object]] = []
+    for appid, game_name, twitch_lookup_name, configured_twitch_category_id in load_games_with_twitch(args.games_file):
         category = None
         if configured_twitch_category_id is not None:
-            category = get_category_by_id(category_id=configured_twitch_category_id, timeout=args.timeout, headers=headers)
+            category = get_category_by_id(
+                category_id=configured_twitch_category_id,
+                timeout=args.timeout,
+                headers=headers,
+            )
         if category is None:
-            category = search_category(lookup_name=twitch_lookup_name, timeout=args.timeout, headers=headers)
+            category = search_category(
+                lookup_name=twitch_lookup_name,
+                timeout=args.timeout,
+                headers=headers,
+            )
 
         if category is None:
             records.append(
@@ -121,7 +119,6 @@ def main() -> int:
                     "viewer_count": None,
                     "pages_fetched": 0,
                     "is_partial": False,
-                    **extra_fields,
                 }
             )
             continue
@@ -156,7 +153,6 @@ def main() -> int:
                     "viewer_count": 0,
                     "pages_fetched": pages_fetched,
                     "is_partial": is_partial,
-                    **extra_fields,
                 }
             )
             continue
@@ -181,18 +177,13 @@ def main() -> int:
                     "viewer_count": stream.get("viewer_count"),
                     "pages_fetched": pages_fetched,
                     "is_partial": is_partial,
-                    **extra_fields,
                 }
             )
 
         if args.sleep > 0:
             time.sleep(args.sleep)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
-
+    write_enveloped_ndjson(records, args.output, metadata_fields)
     print(f"Wrote {len(records)} twitch channel rows to {args.output}")
     return 0
 

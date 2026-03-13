@@ -1,9 +1,10 @@
 select
-    cast(json_extract_scalar(payload, '$.appid') as bigint) as appid,
-    json_extract_scalar(payload, '$.name') as app_name,
-    json_extract_scalar(payload, '$.type') as app_type,
-    cast(json_extract_scalar(payload, '$.dt') as date) as event_date,
-    cast(json_extract_scalar(payload, '$.hour') as integer) as event_hour,
-    upload_dt as ingested_at,
-    json_extract_scalar(payload, '$.source_file') as source_file
-from {{ ref('raw_steam_app_types') }}
+    cast(json_extract_scalar(json_parse(payload), '$.appid') as bigint) as appid,
+    json_extract_scalar(json_parse(payload), '$.name') as app_name,
+    json_extract_scalar(json_parse(payload), '$.type') as app_type,
+    cast(dt as date) as event_date,
+    cast(hour as integer) as event_hour,
+    cast(replace(substr(ingested_at, 1, 19), 'T', ' ') as timestamp(3)) as ingested_at,
+    cast(source_file as varchar) as source_file
+from {{ source('raw', 'appdetails_types_files') }}
+where payload is not null
