@@ -19,6 +19,25 @@ default_args = {
 }
 
 
+def ods_logical_date(current_logical_date: dt.datetime, **_: object) -> dt.datetime:
+    current_moscow = pendulum.instance(current_logical_date).in_timezone(MOSCOW_TZ)
+    target_day = current_moscow.date()
+
+    # Manual runs after 03:00 Moscow should wait for that day's scheduled ODS run.
+    if current_moscow.time() < dt.time(hour=3):
+        target_day -= dt.timedelta(days=1)
+
+    return pendulum.datetime(
+        target_day.year,
+        target_day.month,
+        target_day.day,
+        3,
+        0,
+        0,
+        tz=MOSCOW_TZ,
+    )
+
+
 with DAG(
     dag_id="steam_dma_twich_online_daily",
     start_date=pendulum.datetime(2024, 1, 1, tz=MOSCOW_TZ),
@@ -31,6 +50,7 @@ with DAG(
         task_id="wait_for_ods",
         external_dag_id="steam_ods_daily",
         external_task_id="test_ods_models",
+        execution_date_fn=ods_logical_date,
         allowed_states=["success"],
         failed_states=["failed", "skipped"],
         mode="reschedule",
