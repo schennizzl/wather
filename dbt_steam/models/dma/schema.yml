@@ -1,0 +1,9 @@
+version: 2
+
+models:
+  - name: dma_steam_twich_online
+    columns:
+      - name: sk_steam_twich_hex
+        tests:
+          - not_null
+          - unique

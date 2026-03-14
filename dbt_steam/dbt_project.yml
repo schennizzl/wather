@@ -24,3 +24,6 @@ models:
     ods:
       +schema: ods
       +materialized: table
+    dma:
+      +schema: dma
+      +materialized: table
