@@ -42,7 +42,7 @@
   </property>
   <property>
     <name>metastore.warehouse.dir</name>
-    <value>s3a://raw/warehouse</value>
+    <value>s3a://dwh/warehouse</value>
   </property>
   <property>
     <name>fs.s3a.endpoint</name>

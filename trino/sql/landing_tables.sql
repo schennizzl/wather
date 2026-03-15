@@ -2,7 +2,7 @@ CREATE SCHEMA IF NOT EXISTS hive.raw
 WITH (location = 's3a://raw/steam/raw/');
 
 CREATE SCHEMA IF NOT EXISTS hive.stg
-WITH (location = 's3a://raw/warehouse/stg/');
+WITH (location = 's3a://dwh/warehouse/stg/');
 
 CREATE TABLE IF NOT EXISTS hive.raw.store_daily_files (
     payload VARCHAR,

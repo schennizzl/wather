@@ -547,9 +547,10 @@ class MinioReporter:
 
 def trino_storage_paths() -> list[dict[str, str]]:
     return [
-        {"name": "raw", "path": "/data/raw/warehouse/raw"},
-        {"name": "stg", "path": "/data/raw/warehouse/stg"},
-        {"name": "ods", "path": "/data/raw/warehouse/ods.db"},
+        {"name": "raw", "path": "/data/dwh/warehouse/raw"},
+        {"name": "stg", "path": "/data/dwh/warehouse/stg"},
+        {"name": "ods", "path": "/data/dwh/warehouse/ods.db"},
+        {"name": "dma", "path": "/data/dwh/warehouse/dma.db"},
     ]
 
 
@@ -769,7 +770,7 @@ def main() -> int:
     )
     minio_reporter = MinioReporter(
         docker_monitor=docker_monitor,
-        buckets=env_csv("MINIO_BUCKETS", ["raw"]),
+        buckets=env_csv("MINIO_BUCKETS", ["raw", "dwh"]),
         endpoint=os.getenv("MINIO_ENDPOINT", "http://minio:9000"),
         access_key=os.getenv("MINIO_ACCESS_KEY", "admin"),
         secret_key=env_value("MINIO_SECRET_KEY"),
