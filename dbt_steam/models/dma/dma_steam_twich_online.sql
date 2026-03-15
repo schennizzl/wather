@@ -1,20 +1,7 @@
 {{ config(
-    materialized='incremental',
-    incremental_strategy='merge',
-    unique_key='sk_steam_twich_hex',
+    materialized='table',
     on_schema_change='sync_all_columns'
 ) }}
-
-{% set incremental_lookback_days = var('dma_steam_twich_online_lookback_days', 2) %}
-{% set incremental_boundary %}
-    coalesce(
-        (
-            select date_add('day', -{{ incremental_lookback_days }}, max(event_ts_hour))
-            from {{ this }}
-        ),
-        timestamp '1970-01-01 00:00:00'
-    )
-{% endset %}
 
 with steam_online as (
 	select
@@ -26,9 +13,6 @@ with steam_online as (
 	left join {{ ref('ods_game_name_history') }} as game_name
 		on steam_online.appid = game_name.appid
 		and game_name.valid_to_ts is null
-    {% if is_incremental() %}
-    where steam_online.event_ts_hour >= {{ incremental_boundary }}
-    {% endif %}
 ),
 twitch_online as (
 	select
@@ -42,9 +26,6 @@ twitch_online as (
 	left join {{ ref('ods_twitch_category_name_history') }} as twitch_name
 		on twitch_name.twitch_category_id = twitch_online.twitch_category_id
 		and twitch_name.valid_to_ts is NULL
-    {% if is_incremental() %}
-    where twitch_online.event_ts_hour >= {{ incremental_boundary }}
-    {% endif %}
 ),
 streamers as (
 	select
@@ -59,9 +40,6 @@ streamers as (
 	left join {{ ref('ods_twitch_broadcaster_profile_history') }} as profile
 		on streamers.broadcaster_id = profile.broadcaster_id
 		and profile.valid_to_ts is null
-    {% if is_incremental() %}
-    where streamers.event_ts_hour >= {{ incremental_boundary }}
-    {% endif %}
 )
 select
     to_hex(
