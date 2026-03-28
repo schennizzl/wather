@@ -97,7 +97,7 @@ services:
   trino:
     image: trinodb/trino:449
     restart: unless-stopped
-    mem_limit: 20g
+    mem_limit: 15g
     depends_on:
       - hive-metastore
       - minio
